@@ -14,9 +14,9 @@ import subprocess
 
 # ElasticSearch Cluster to Send Metrics
 elasticIndex = os.environ.get('GPU_METRICS_INDEX_NAME', 'gpu_metrics')
-elasticMonitoringCluster = os.environ.get('GPU_METRICS_CLUSTER_URL', 'http://192.168.1.151:9200')
+elasticMonitoringCluster = os.environ.get('GPU_METRICS_CLUSTER_URL', 'http://10.1.1.6:9200')
 interval = int(os.environ.get('GPU_METRICS_INTERVAL', '10'))
-
+#15 19 20
 def get_gpu_data(gpu):
     query = ["timestamp","gpu_name","pci.bus_id","driver_version","pstate","pcie.link.gen.max","pcie.link.gen.current",
              "temperature.gpu","utilization.gpu","utilization.memory","memory.total","memory.free","memory.used","power.draw",
@@ -34,6 +34,10 @@ def get_gpu_data(gpu):
                                                         "clocks.max.mem,clocks.max.sm,clocks.max.graphics",
                                           "--format=csv,nounits,noheader"]).rstrip()
         list_strings = output.split(", ")
+        #print(list_strings)
+        for out in list_strings:
+            if 'Not Supported' in out:
+                list_strings[list_strings.index(out)]='0'
         list_values = [t(x) for t, x in zip(dType, list_strings)]
         zipped = dict(zip(query, list_values))
         zipped['@timestamp'] = str(datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3])
@@ -44,7 +48,7 @@ def get_gpu_data(gpu):
         #pp.pprint(zipped)
         post_data(zipped)
     except Exception as e:
-        print "Error:  {0}".format(str(e))
+        print "Error:  {0}".format(e)
         pass
 
 
@@ -95,7 +99,7 @@ if __name__ == '__main__':
     try:
         gpus = subprocess.check_output(["nvidia-smi", "-L"]).rstrip()
         gpus = len(gpus.split('\n'))
-        #print "Found %s GPUs" % gpus
+        print "Found %s GPUs" % gpus
     except subprocess.CalledProcessError as e:
         print e.output
         print "No GPUs Found"
