@@ -1,11 +1,12 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+#!code: utf-8
 #Collect metrics from NVIDIA GPUs using nvidia-smi tool and send to Elasticsearch
 
 import datetime
 import time
 import urllib
 import json
-import urllib2
+import requests
 import os
 import socket
 import sys
@@ -32,7 +33,7 @@ def get_gpu_data(gpu):
                                                         "ecc.errors.corrected.aggregate.total,"
                                                         "ecc.errors.uncorrected.aggregate.total,gpu_uuid,"
                                                         "clocks.max.mem,clocks.max.sm,clocks.max.graphics",
-                                          "--format=csv,nounits,noheader"]).rstrip()
+                                          "--format=csv,nounits,noheader"]).rstrip().decode()
         list_strings = output.split(", ")
         #print(list_strings)
         for out in list_strings:
@@ -48,7 +49,7 @@ def get_gpu_data(gpu):
         #pp.pprint(zipped)
         post_data(zipped)
     except Exception as e:
-        print "Error:  {0}".format(e)
+        print( "Error:  {0}".format(e))
         pass
 
 
@@ -58,10 +59,13 @@ def get_gpu_apps(gpu):
     try:
         output = subprocess.check_output(["nvidia-smi", "-i", str(gpu), "--query-compute-apps=timestamp,gpu_name,gpu_bus_id,"
                                                         "gpu_serial,gpu_uuid,pid,process_name,used_gpu_memory",
-                                          "--format=csv,nounits,noheader"]).rstrip()
+                                          "--format=csv,nounits,noheader"]).rstrip().decode()
         if len(output) >= 1:
           for line in output.split('\n'):
             list_strings = line.split(", ")
+            for out in list_strings:
+                if 'Not Supported' in out:
+                    list_strings[list_strings.index(out)] = '0'
             list_values = [t(x) for t, x in zip(dType, list_strings)]
             zipped = dict(zip(query, list_values))
             zipped['@timestamp'] = str(datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3])
@@ -71,7 +75,7 @@ def get_gpu_apps(gpu):
             #pp.pprint(zipped)
             post_data(zipped)
     except Exception as e:
-        print "Error:  {0}".format(str(e))
+        print( "Error:  {0}".format(str(e)))
         pass
 
 
@@ -82,11 +86,11 @@ def post_data(data):
     url = "%(cluster)s/%(index)s-%(index_period)s/message" % url_parameters
     headers = {'content-type': 'application/json'}
     try:
-        req = urllib2.Request(url, headers=headers, data=json.dumps(data))
-        response = urllib2.urlopen(req)
+        req = requests.post(url, headers=headers, data=json.dumps(data))
+        # response = urllib2.urlopen(req)
         #print response.read()
     except Exception as e:
-        print "Error:  {0}".format(str(e))
+        print( "Error:  {0}".format(str(e)))
 
 
 def main(gpus):
@@ -97,12 +101,12 @@ def main(gpus):
 
 if __name__ == '__main__':
     try:
-        gpus = subprocess.check_output(["nvidia-smi", "-L"]).rstrip()
+        gpus = subprocess.check_output(["nvidia-smi", "-L"]).rstrip().decode()
         gpus = len(gpus.split('\n'))
-        print "Found %s GPUs" % gpus
+        #print "Found %s GPUs" % gpus
     except subprocess.CalledProcessError as e:
-        print e.output
-        print "No GPUs Found"
+        print( e.output)
+        print("No GPUs Found")
         exit(1)
     try:
         nextRun = 0
@@ -120,7 +124,7 @@ if __name__ == '__main__':
                     time.sleep(timeDiff)
 
     except KeyboardInterrupt:
-        print 'Interrupted'
+        print ('Interrupted')
         try:
             sys.exit(0)
         except SystemExit:
